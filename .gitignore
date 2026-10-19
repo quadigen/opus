@@ -81,3 +81,9 @@ book/
 
 # Don't include users' poetry configs
 /poetry.toml
+homeserver.db-shm
+homeserver.db-wal
+synapse/storage/schema/main/delta/95/50_kinemium.sql.postgres
+synapse/storage/schema/main/delta/95/50_kinemium.sql.sqlite
+synapse/storage/schema/main/delta/96/50_kinemium_customization.sql.postgres
+synapse/storage/schema/main/delta/96/50_kinemium_customization.sql.sqlite
