@@ -1,109 +1,237 @@
-.. image:: https://github.com/element-hq/synapse/raw/develop/docs/element_logo_white_bg.svg
-   :height: 60px
+Opus
+====
 
-**Element Synapse - Matrix homeserver implementation**
+**The backend platform for Kinemium.**
 
-|support| |development| |documentation| |license| |pypi| |python|
+Opus is the self-hostable online backend for Kinemium. It is a Synapse-based
+`Matrix <https://matrix.org>`__ homeserver with the Kinemium developer-platform
+module built in under ``/_kinemium/v1``. It provides the accounts, identities,
+packages, marketplace, spaces, hosting, collaboration, and platform services
+that Kinemium clients use around games and packages.
 
-Synapse is an open source `Matrix <https://matrix.org>`__ homeserver
-implementation, written and maintained by `Element <https://element.io>`_.
-`Matrix <https://github.com/matrix-org>`__ is the open standard for secure and
-interoperable real-time communications. You can directly run and manage the
-source code in this repository, available under an AGPL license (or
-alternatively under a commercial license from Element).
+Opus is not the Kinemium engine or editor. Kinemium still runs games locally and
+exports standalone builds. Opus supplies the online services that connect
+creators, packages, spaces, and playtests.
 
-There is no support provided by Element unless you have a subscription from
-Element.
+Because Opus is built on `Synapse <https://github.com/element-hq/synapse>`__, it
+also provides normal Matrix accounts, rooms, client APIs, and federation.
+Kinemium-specific behavior lives in the module.
 
-🚀 Getting started
-==================
+What Opus provides
+------------------
 
-This component is developed and maintained by `Element <https://element.io>`_.
-It gets shipped as part of the **Element Server Suite (ESS)** which provides the
-official means of deployment.
+Accounts and identity
+~~~~~~~~~~~~~~~~~~~~~
 
-ESS is a Matrix distribution from Element with focus on quality and ease of use.
-It ships a full Matrix stack tailored to the respective use case.
+* Matrix accounts for Kinemium users.
+* Developer profiles with display names, bios, websites, pronouns, status text,
+  status emoji, accent colors, avatars, and banners.
+* Public developer profiles and account pages.
+* Game identities with names, descriptions, websites, icons, and banners.
+* Public game profiles that other Kinemium users and widgets can display.
 
-There are three editions of ESS:
+Authentication and API access
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-- `ESS Community <https://github.com/element-hq/ess-helm>`_ - the free Matrix
-  distribution from Element tailored to small-/mid-scale, non-commercial
-  community use cases
-- `ESS Pro <https://element.io/server-suite>`_ - the commercial Matrix
-  distribution from Element for professional use
-- `ESS TI-M <https://element.io/server-suite/ti-messenger>`_ - a special version
-  of ESS Pro focused on the requirements of TI-Messenger Pro and ePA as
-  specified by the German National Digital Health Agency Gematik
+* Standard Matrix access tokens.
+* Kinemium API tokens prefixed with ``knm_``.
+* Scoped API tokens for account, package, marketplace, and space operations.
+* Game-bound tokens that can read and update one game without managing the
+  developer's other games or tokens.
+* Token listing, revocation, and scope enforcement.
 
+Package registry
+~~~~~~~~~~~~~~~~
 
-🛠️ Standalone installation and configuration
-============================================
+* Namespaces for developers and Matrix spaces.
+* Publishing of Kinemium package archives in ZIP or tar format.
+* Versioned manifests with entrypoints, engine constraints, dependencies, tags,
+  visibility, and package types.
+* Readmes, changelogs, screenshots, icons, banners, and download statistics.
+* Dependency resolution and package version pinning.
+* Version yanking, package archiving, review queues, and download integrity
+  checks using SHA-256 digests.
+* Owner and administrator management of packages and versions.
 
-The Synapse documentation describes `options for installing Synapse standalone
-<https://element-hq.github.io/synapse/latest/setup/installation.html>`_. See
-below for more useful documentation links.
+Marketplace
+~~~~~~~~~~~
 
-- `Synapse configuration options <https://element-hq.github.io/synapse/latest/usage/configuration/config_documentation.html>`_
-- `Synapse configuration for federation <https://element-hq.github.io/synapse/latest/federate.html>`_
-- `Using a reverse proxy with Synapse <https://element-hq.github.io/synapse/latest/reverse_proxy.html>`_
-- `Upgrading Synapse <https://element-hq.github.io/synapse/develop/upgrade.html>`_
+* A package-backed marketplace for approved Kinemium packages.
+* Search and filtering by namespace, type, tag, and official status.
+* Acquire, uninstall, pin, and update workflows.
+* Ratings, reviews, comments, reactions, and install/download counts.
+* Package and version review before public listing.
+* Moderation reports and administrator actions. Paid listings are not supported.
 
+Spaces
+~~~~~~
 
-🎯 Troubleshooting and support
-==============================
+* Matrix spaces with Kinemium profiles.
+* Space names, topics, descriptions, avatars, banners, and accent colors.
+* Custom space emojis, including animated GIF emojis.
+* Space-owned package namespaces and packages.
+* Administrator-managed official package markers.
 
-🚀 Professional support
------------------------
+Game server hosting
+~~~~~~~~~~~~~~~~~~~
 
-Enterprise quality support for Synapse including SLAs is available as part of an
-`Element Server Suite (ESS) <https://element.io/pricing>`_ subscription.
+* Free hosted-server requests for Kinemium games.
+* ``.kine`` project uploads with region, player limit, and operator notes.
+* A provisioning queue for an operator-managed worker.
+* Server records, addresses, ports, heartbeats, and status tracking.
+* Administrator views for pending requests and provisioned servers.
 
-If you are an existing ESS subscriber then you can raise a `support request <https://customer.element.io/support>`_
-and access the `Element product documentation <https://docs.element.io>`_.
+Studio collaboration
+~~~~~~~~~~~~~~~~~~~~
 
-🤝 Community support
---------------------
+* Temporary collaboration sessions for a game.
+* Invitations, join codes, join requests, approvals, denials, and participant
+  management.
+* WebRTC signaling for editor sessions over HTTP polling.
+* Session, invitation, and signal expiry with host heartbeats.
+* Peer-to-peer project synchronization. Opus does not store project data.
 
-The `Admin FAQ <https://element-hq.github.io/synapse/latest/usage/administration/admin_faq.html>`_
-includes tips on dealing with some common problems. For more details, see
-`Synapse's wider documentation <https://element-hq.github.io/synapse/latest/>`_.
+Platform services
+~~~~~~~~~~~~~~~~~
 
-For additional support installing or managing Synapse, please ask in the community
-support room |room|_ (from a matrix.org account if necessary). We do not use GitHub
-issues for support requests, only for bug reports and feature requests.
+* Runtime capability discovery at ``/_kinemium/v1/capabilities``.
+* A machine-readable OpenAPI 3.1 description at ``/_kinemium/v1/openapi.json``.
+* In-app notifications for package, marketplace, namespace, and collaboration
+  activity.
+* HMAC-signed webhooks for platform events.
+* Reports, administrator audit logs, rate limits, idempotency keys, CORS
+  controls, and security headers.
+* Embeddable HTML and SVG widgets for packages, users, namespaces, and games.
 
-.. |room| replace:: ``#synapse:matrix.org``
-.. _room: https://matrix.to/#/#synapse:matrix.org
+Administration
+~~~~~~~~~~~~~~
 
-.. |docs| replace:: ``docs``
-.. _docs: docs
+* A browser review page at ``/_kinemium/admin/review``.
+* Package and version approval or rejection with review notes.
+* Full package search, editing, version uploads, yanking, restoring, and
+  deletion.
+* Namespace transfers, moderation reports, audit history, and game-server
+  administration.
 
+Architecture
+------------
 
-🛠️ Development
-==============
+.. code-block:: text
 
-We welcome contributions to Synapse from the community!
-The best place to get started is our
-`guide for contributors <https://element-hq.github.io/synapse/latest/development/contributing_guide.html>`_.
-This is part of our broader `documentation <https://element-hq.github.io/synapse/latest>`_, which includes
-information for Synapse developers as well as Synapse administrators.
+   Kinemium client or editor
+             |
+             | Matrix access token or knm_ API token
+             v
+   Opus  /_kinemium/v1
+             |
+             +-- Kinemium module services
+             +-- Synapse: accounts, rooms, auth, federation
+             +-- PostgreSQL or SQLite
+             +-- storage_path: package archives
 
-Developers might be particularly interested in:
+The module stores its data in the normal Synapse database. Schema deltas 95
+through 106 add the Kinemium tables. Uploaded package archives are stored under
+``storage_path``; only the local storage backend is supported.
 
-* `Synapse's database schema <https://element-hq.github.io/synapse/latest/development/database_schema.html>`_,
-* `notes on Synapse's implementation details <https://element-hq.github.io/synapse/latest/development/internal_documentation/index.html>`_, and
-* `how we use git <https://element-hq.github.io/synapse/latest/development/git.html>`_.
+Quick start
+-----------
 
-Alongside all that, join our developer community on Matrix:
-`#synapse-dev:matrix.org <https://matrix.to/#/#synapse-dev:matrix.org>`_, featuring real humans!
+1. Install the repository and its Rust extension:
+
+   .. code-block:: bash
+
+      git clone https://github.com/quadigen/opus.git
+      cd opus
+      python3 -m venv .venv
+      .venv/bin/pip install -e .
+
+2. Add the module to ``homeserver.yaml``:
+
+   .. code-block:: yaml
+
+      modules:
+        - module: kinemium_module.KinemiumModule
+          config:
+            storage_path: /var/lib/synapse/kinemium
+
+3. Apply the normal Synapse schema migration and start Synapse.
+
+``storage_path`` is required and must be an absolute, writable directory.
+PostgreSQL is recommended for production; SQLite is supported. See the
+`local hosting guide <docs/kinemium-local-hosting.md>`__ for a complete setup,
+including the Opus client, CORS, HTTPS, and reverse-proxy notes.
+
+Authentication
+--------------
+
+Requests may use a Matrix access token or a Kinemium API token:
+
+.. code-block:: http
+
+   Authorization: Bearer <matrix_access_token>
+   Authorization: Bearer knm_<token>
+
+Kinemium tokens are created with ``POST /me/tokens`` and are shown only once.
+They must be sent in the ``Authorization`` header, not as an ``access_token``
+query parameter. Matrix tokens have all scopes. API tokens receive only the
+scopes requested when they are created.
+
+Documentation
+-------------
+
+* `Kinemium API reference <docs/kinemium.md>`__: endpoints, schemas, scopes,
+  review behavior, collaboration, widgets, and limits.
+* `Local hosting guide <docs/kinemium-local-hosting.md>`__: running Opus and
+  the Opus client on your own machine or server.
+* ``/_kinemium/v1/capabilities``: runtime feature flags and limits.
+* ``/_kinemium/v1/openapi.json``: machine-readable API description.
+
+Development
+-----------
+
+Run the Kinemium test suite:
+
+.. code-block:: bash
+
+   .venv/bin/python -m twisted.trial tests.kinemium.test_kinemium
+
+The suite covers accounts, games, spaces, package lifecycle, marketplace
+moderation, reports, notifications, webhooks, audit logging, idempotency,
+game-server hosting, and Studio collaboration.
+
+When Rust sources change, rebuild the extension:
+
+.. code-block:: bash
+
+   uv pip install --python .venv/bin/python -e .
+
+Security notes
+--------------
+
+* Keep ``homeserver.yaml``, signing keys, database files, and API keys out of
+  Git.
+* Use HTTPS and email verification for public registration.
+* Set ``cors_origins`` to the exact browser origins used in production instead
+  of the permissive default.
+* Treat collaboration join codes and webhook signing secrets as credentials.
+
+Upstream and licensing
+----------------------
+
+Opus is a fork of Synapse. Upstream Synapse documentation still applies to
+Matrix homeserver administration, federation, and deployment.
+
+Synapse is dual-licensed by Element Creations Ltd under the GNU Affero General
+Public License v3 or a commercial license. See ``LICENSE-AGPL-3.0`` and
+``LICENSE-COMMERCIAL`` for the full terms. Review the repository license files
+before redistributing Opus.
 
 Copyright and Licensing
-=======================
+-----------------------
 
-  | Copyright 2014–2017 OpenMarket Ltd
+  | Copyright 2014-2017 OpenMarket Ltd
   | Copyright 2017 Vector Creations Ltd
-  | Copyright 2017–2025 New Vector Ltd
+  | Copyright 2017-2025 New Vector Ltd
   | Copyright 2025 Element Creations Ltd
 
 This software is dual-licensed by Element Creations Ltd (Element). It can be
@@ -124,28 +252,3 @@ specific language governing permissions and limitations under the Licenses.
 
 Please contact `licensing@element.io <mailto:licensing@element.io>`_ to purchase
 an Element commercial license for this software.
-
-
-.. |support| image:: https://img.shields.io/badge/matrix-community%20support-success
-  :alt: (get community support in #synapse:matrix.org)
-  :target: https://matrix.to/#/#synapse:matrix.org
-
-.. |development| image:: https://img.shields.io/matrix/synapse-dev:matrix.org?label=development&logo=matrix
-  :alt: (discuss development on #synapse-dev:matrix.org)
-  :target: https://matrix.to/#/#synapse-dev:matrix.org
-
-.. |documentation| image:: https://img.shields.io/badge/documentation-%E2%9C%93-success
-  :alt: (Rendered documentation on GitHub Pages)
-  :target: https://element-hq.github.io/synapse/latest/
-
-.. |license| image:: https://img.shields.io/github/license/element-hq/synapse
-  :alt: (check license in LICENSE file)
-  :target: LICENSE
-
-.. |pypi| image:: https://img.shields.io/pypi/v/matrix-synapse
-  :alt: (latest version released on PyPi)
-  :target: https://pypi.org/project/matrix-synapse
-
-.. |python| image:: https://img.shields.io/pypi/pyversions/matrix-synapse
-  :alt: (supported python versions)
-  :target: https://pypi.org/project/matrix-synapse
