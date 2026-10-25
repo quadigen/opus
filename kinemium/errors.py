@@ -51,6 +51,10 @@ def conflict(
     return KinemiumError(409, message, CONFLICT, details)
 
 
+def internal_error(message: str = "Internal server error.") -> KinemiumError:
+    return KinemiumError(500, message, INTERNAL_ERROR)
+
+
 def rate_limited(retry_after_ms: int) -> KinemiumError:
     error = KinemiumError(
         429,

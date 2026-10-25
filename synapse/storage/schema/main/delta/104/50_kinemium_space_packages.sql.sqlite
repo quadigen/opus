@@ -1,0 +1,16 @@
+ALTER TABLE kinemium_package_namespaces ADD COLUMN space_id TEXT;
+
+ALTER TABLE kinemium_packages ADD COLUMN space_id TEXT;
+ALTER TABLE kinemium_packages ADD COLUMN official BOOLEAN NOT NULL DEFAULT 0;
+ALTER TABLE kinemium_packages ADD COLUMN official_at BIGINT;
+ALTER TABLE kinemium_packages ADD COLUMN official_by TEXT;
+
+CREATE UNIQUE INDEX IF NOT EXISTS kinemium_package_namespaces_space_idx
+    ON kinemium_package_namespaces (space_id)
+    WHERE space_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS kinemium_packages_space_idx
+    ON kinemium_packages (space_id, updated_at DESC);
+
+CREATE INDEX IF NOT EXISTS kinemium_packages_official_idx
+    ON kinemium_packages (official, published_at DESC);

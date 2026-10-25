@@ -1,0 +1,56 @@
+ALTER TABLE kinemium_games ADD COLUMN description TEXT NOT NULL DEFAULT '';
+ALTER TABLE kinemium_games ADD COLUMN icon_url TEXT;
+ALTER TABLE kinemium_games ADD COLUMN banner_url TEXT;
+ALTER TABLE kinemium_games ADD COLUMN website TEXT;
+
+CREATE TABLE IF NOT EXISTS kinemium_game_server_requests (
+    request_id TEXT PRIMARY KEY,
+    game_id TEXT NOT NULL REFERENCES kinemium_games(game_id) ON DELETE CASCADE,
+    owner_user_id TEXT NOT NULL REFERENCES kinemium_profiles(user_id) ON DELETE CASCADE,
+    region TEXT NOT NULL DEFAULT 'auto',
+    max_players INTEGER NOT NULL DEFAULT 16,
+    note TEXT NOT NULL DEFAULT '',
+    kine_filename TEXT NOT NULL,
+    kine_storage_key TEXT NOT NULL,
+    kine_digest TEXT NOT NULL,
+    kine_size BIGINT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'claimed', 'failed')),
+    claimed_by TEXT,
+    claimed_at BIGINT,
+    failure_reason TEXT NOT NULL DEFAULT '',
+    created_at BIGINT NOT NULL,
+    updated_at BIGINT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS kinemium_game_server_requests_status_idx
+    ON kinemium_game_server_requests (status, created_at, request_id);
+CREATE INDEX IF NOT EXISTS kinemium_game_server_requests_game_idx
+    ON kinemium_game_server_requests (game_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS kinemium_game_server_requests_owner_idx
+    ON kinemium_game_server_requests (owner_user_id, created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS kinemium_game_server_requests_active_idx
+    ON kinemium_game_server_requests (game_id)
+    WHERE status IN ('pending', 'claimed');
+
+CREATE TABLE IF NOT EXISTS kinemium_game_servers (
+    server_id TEXT PRIMARY KEY,
+    game_id TEXT NOT NULL REFERENCES kinemium_games(game_id) ON DELETE CASCADE,
+    owner_user_id TEXT NOT NULL REFERENCES kinemium_profiles(user_id) ON DELETE CASCADE,
+    request_id TEXT,
+    worker_id TEXT NOT NULL DEFAULT '',
+    region TEXT NOT NULL DEFAULT 'auto',
+    address TEXT,
+    port INTEGER,
+    max_players INTEGER NOT NULL DEFAULT 16,
+    status TEXT NOT NULL DEFAULT 'starting' CHECK (status IN ('starting', 'online', 'offline', 'failed')),
+    created_at BIGINT NOT NULL,
+    updated_at BIGINT NOT NULL,
+    last_heartbeat_at BIGINT
+);
+
+CREATE INDEX IF NOT EXISTS kinemium_game_servers_game_idx
+    ON kinemium_game_servers (game_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS kinemium_game_servers_owner_idx
+    ON kinemium_game_servers (owner_user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS kinemium_game_servers_status_idx
+    ON kinemium_game_servers (status, created_at DESC);

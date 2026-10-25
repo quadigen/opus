@@ -1,0 +1,100 @@
+CREATE TABLE IF NOT EXISTS kinemium_collab_sessions (
+    session_id TEXT PRIMARY KEY,
+    game_id TEXT NOT NULL REFERENCES kinemium_games(game_id) ON DELETE CASCADE,
+    host_user_id TEXT NOT NULL REFERENCES kinemium_profiles(user_id) ON DELETE CASCADE,
+    name TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'ended', 'expired')),
+    join_code_hash TEXT NOT NULL UNIQUE,
+    next_signal_sequence BIGINT NOT NULL DEFAULT 1,
+    max_participants INTEGER NOT NULL DEFAULT 16,
+    created_at BIGINT NOT NULL,
+    updated_at BIGINT NOT NULL,
+    last_heartbeat_at BIGINT NOT NULL,
+    expires_at BIGINT NOT NULL,
+    ended_at BIGINT,
+    ended_by TEXT
+);
+
+CREATE INDEX IF NOT EXISTS kinemium_collab_sessions_game_idx
+    ON kinemium_collab_sessions (game_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS kinemium_collab_sessions_host_idx
+    ON kinemium_collab_sessions (host_user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS kinemium_collab_sessions_expiry_idx
+    ON kinemium_collab_sessions (status, expires_at);
+CREATE UNIQUE INDEX IF NOT EXISTS kinemium_collab_sessions_active_game_idx
+    ON kinemium_collab_sessions (game_id)
+    WHERE status = 'active';
+
+CREATE TABLE IF NOT EXISTS kinemium_collab_participants (
+    session_id TEXT NOT NULL REFERENCES kinemium_collab_sessions(session_id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES kinemium_profiles(user_id) ON DELETE CASCADE,
+    role TEXT NOT NULL CHECK (role IN ('host', 'guest')),
+    status TEXT NOT NULL DEFAULT 'joined' CHECK (status IN ('invited', 'joined', 'left', 'kicked')),
+    invited_by TEXT,
+    joined_at BIGINT,
+    last_seen_at BIGINT NOT NULL,
+    left_at BIGINT,
+    PRIMARY KEY (session_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS kinemium_collab_participants_user_idx
+    ON kinemium_collab_participants (user_id, status, session_id);
+CREATE INDEX IF NOT EXISTS kinemium_collab_participants_session_idx
+    ON kinemium_collab_participants (session_id, status, role);
+
+CREATE TABLE IF NOT EXISTS kinemium_collab_invites (
+    invite_id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL REFERENCES kinemium_collab_sessions(session_id) ON DELETE CASCADE,
+    inviter_user_id TEXT NOT NULL REFERENCES kinemium_profiles(user_id) ON DELETE CASCADE,
+    invitee_user_id TEXT NOT NULL REFERENCES kinemium_profiles(user_id) ON DELETE CASCADE,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'declined', 'revoked', 'expired')),
+    created_at BIGINT NOT NULL,
+    updated_at BIGINT NOT NULL,
+    expires_at BIGINT NOT NULL,
+    responded_at BIGINT
+);
+
+CREATE INDEX IF NOT EXISTS kinemium_collab_invites_session_idx
+    ON kinemium_collab_invites (session_id, status, created_at DESC);
+CREATE INDEX IF NOT EXISTS kinemium_collab_invites_invitee_idx
+    ON kinemium_collab_invites (invitee_user_id, status, created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS kinemium_collab_invites_pending_idx
+    ON kinemium_collab_invites (session_id, invitee_user_id)
+    WHERE status = 'pending';
+
+CREATE TABLE IF NOT EXISTS kinemium_collab_join_requests (
+    request_id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL REFERENCES kinemium_collab_sessions(session_id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES kinemium_profiles(user_id) ON DELETE CASCADE,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'denied', 'cancelled')),
+    created_at BIGINT NOT NULL,
+    updated_at BIGINT NOT NULL,
+    decided_at BIGINT,
+    decided_by TEXT
+);
+
+CREATE INDEX IF NOT EXISTS kinemium_collab_join_requests_session_idx
+    ON kinemium_collab_join_requests (session_id, status, created_at DESC);
+CREATE INDEX IF NOT EXISTS kinemium_collab_join_requests_user_idx
+    ON kinemium_collab_join_requests (user_id, status, created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS kinemium_collab_join_requests_pending_idx
+    ON kinemium_collab_join_requests (session_id, user_id)
+    WHERE status = 'pending';
+
+CREATE TABLE IF NOT EXISTS kinemium_collab_signals (
+    signal_id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL REFERENCES kinemium_collab_sessions(session_id) ON DELETE CASCADE,
+    sequence BIGINT NOT NULL,
+    from_user_id TEXT NOT NULL REFERENCES kinemium_profiles(user_id) ON DELETE CASCADE,
+    to_user_id TEXT REFERENCES kinemium_profiles(user_id) ON DELETE CASCADE,
+    kind TEXT NOT NULL,
+    payload TEXT NOT NULL,
+    created_at BIGINT NOT NULL,
+    expires_at BIGINT NOT NULL,
+    UNIQUE (session_id, sequence)
+);
+
+CREATE INDEX IF NOT EXISTS kinemium_collab_signals_poll_idx
+    ON kinemium_collab_signals (session_id, sequence);
+CREATE INDEX IF NOT EXISTS kinemium_collab_signals_expiry_idx
+    ON kinemium_collab_signals (expires_at);

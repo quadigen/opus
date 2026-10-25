@@ -22,8 +22,6 @@ ACCOUNT_WRITE = "account:write"
 MARKETPLACE_READ = "marketplace:read"
 MARKETPLACE_WRITE = "marketplace:write"
 MARKETPLACE_ACQUIRE = "marketplace:acquire"
-DATASTORES_READ = "datastores:read"
-DATASTORES_WRITE = "datastores:write"
 PACKAGES_READ = "packages:read"
 PACKAGES_WRITE = "packages:write"
 SPACES_READ = "spaces:read"
@@ -36,8 +34,6 @@ ALL_SCOPES = frozenset(
         MARKETPLACE_READ,
         MARKETPLACE_WRITE,
         MARKETPLACE_ACQUIRE,
-        DATASTORES_READ,
-        DATASTORES_WRITE,
         PACKAGES_READ,
         PACKAGES_WRITE,
         SPACES_READ,
@@ -111,9 +107,14 @@ def _extract_token(request: SynapseRequest) -> str | None:
     if len(values) > 1:
         raise unauthorized("Too many access_token parameters.")
     try:
-        return values[0].decode("ascii")
+        token = values[0].decode("ascii")
     except UnicodeDecodeError:
         raise unauthorized("Invalid access token.") from None
+    if token.startswith(TOKEN_PREFIX):
+        raise unauthorized(
+            "Kinemium API tokens must be sent in the Authorization header."
+        )
+    return token
 
 
 def _lookup_token(

@@ -1,0 +1,2 @@
+ALTER TABLE kinemium_packages ADD COLUMN icon_url TEXT;
+ALTER TABLE kinemium_packages ADD COLUMN banner_url TEXT;

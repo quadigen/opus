@@ -1,0 +1,52 @@
+ALTER TABLE kinemium_packages ADD COLUMN item_type TEXT NOT NULL DEFAULT 'package'
+    CHECK (item_type IN ('model', 'plugin', 'template', 'tool', 'package'));
+ALTER TABLE kinemium_packages ADD COLUMN tags TEXT NOT NULL DEFAULT '[]';
+ALTER TABLE kinemium_packages ADD COLUMN tags_text TEXT NOT NULL DEFAULT ' ';
+ALTER TABLE kinemium_packages ADD COLUMN visibility TEXT NOT NULL DEFAULT 'public'
+    CHECK (visibility IN ('public', 'unlisted', 'private'));
+ALTER TABLE kinemium_packages ADD COLUMN published_at BIGINT;
+
+UPDATE kinemium_packages SET published_at = (
+    SELECT MAX(v.published_at) FROM kinemium_package_versions v
+    WHERE v.package_id = kinemium_packages.package_id AND v.yanked = FALSE
+);
+
+CREATE INDEX IF NOT EXISTS kinemium_packages_browse_idx
+    ON kinemium_packages (visibility, published_at DESC, package_id DESC);
+CREATE INDEX IF NOT EXISTS kinemium_packages_type_idx
+    ON kinemium_packages (item_type, published_at DESC);
+CREATE INDEX IF NOT EXISTS kinemium_packages_tags_idx
+    ON kinemium_packages (tags_text);
+
+DROP TABLE IF EXISTS kinemium_marketplace_reviews;
+DROP TABLE IF EXISTS kinemium_marketplace_acquisitions;
+DROP TABLE IF EXISTS kinemium_marketplace_versions;
+DROP TABLE IF EXISTS kinemium_marketplace_items;
+DROP TABLE IF EXISTS kinemium_datastore_ordered_entries;
+DROP TABLE IF EXISTS kinemium_datastore_entries;
+DROP TABLE IF EXISTS kinemium_datastores;
+
+CREATE TABLE IF NOT EXISTS kinemium_marketplace_acquisitions (
+    acquisition_id TEXT PRIMARY KEY,
+    package_id TEXT NOT NULL REFERENCES kinemium_packages(package_id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES kinemium_profiles(user_id) ON DELETE CASCADE,
+    created_at BIGINT NOT NULL,
+    UNIQUE (package_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS kinemium_marketplace_acquisitions_user_idx
+    ON kinemium_marketplace_acquisitions (user_id, created_at DESC, acquisition_id DESC);
+
+CREATE TABLE IF NOT EXISTS kinemium_marketplace_reviews (
+    review_id TEXT PRIMARY KEY,
+    package_id TEXT NOT NULL REFERENCES kinemium_packages(package_id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES kinemium_profiles(user_id) ON DELETE CASCADE,
+    rating SMALLINT NOT NULL CHECK (rating BETWEEN 1 AND 5),
+    body TEXT NOT NULL DEFAULT '',
+    created_at BIGINT NOT NULL,
+    updated_at BIGINT NOT NULL,
+    UNIQUE (package_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS kinemium_marketplace_reviews_package_idx
+    ON kinemium_marketplace_reviews (package_id, created_at DESC, review_id DESC);

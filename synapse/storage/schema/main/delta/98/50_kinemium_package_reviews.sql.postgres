@@ -1,0 +1,12 @@
+ALTER TABLE kinemium_packages ADD COLUMN review_status TEXT NOT NULL DEFAULT 'pending'
+    CHECK (review_status IN ('pending', 'approved', 'rejected'));
+ALTER TABLE kinemium_packages ADD COLUMN review_note TEXT NOT NULL DEFAULT '';
+ALTER TABLE kinemium_packages ADD COLUMN reviewed_by TEXT;
+ALTER TABLE kinemium_packages ADD COLUMN reviewed_at BIGINT;
+ALTER TABLE kinemium_packages ADD COLUMN submitted_at BIGINT NOT NULL DEFAULT 0;
+
+UPDATE kinemium_packages SET review_status = 'approved',
+    submitted_at = COALESCE(published_at, created_at);
+
+CREATE INDEX IF NOT EXISTS kinemium_packages_review_idx
+    ON kinemium_packages (review_status, submitted_at, package_id);

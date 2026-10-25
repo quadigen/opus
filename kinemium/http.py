@@ -9,7 +9,7 @@ from typing import Any
 from twisted.python import failure
 
 from synapse.api.errors import SynapseError
-from synapse.http.server import JsonResource, respond_with_json, return_json_error
+from synapse.http.server import JsonResource, respond_with_json
 from synapse.http.site import SynapseRequest
 
 from .config import KinemiumConfig
@@ -21,6 +21,41 @@ from .errors import (
 )
 
 logger = logging.getLogger(__name__)
+
+CORS_EXPOSE_HEADERS = (
+    b"Synapse-Trace-Id, Server, ETag, Digest, Retry-After, X-Kinemium-Yanked,"
+    b" X-Kinemium-Download-Count, X-RateLimit-Limit, X-RateLimit-Remaining,"
+    b" X-RateLimit-Reset, Idempotency-Replayed"
+)
+
+
+def set_security_headers(request: SynapseRequest) -> None:
+    request.setHeader(b"X-Content-Type-Options", b"nosniff")
+    request.setHeader(b"Referrer-Policy", b"no-referrer")
+    request.setHeader(b"X-Frame-Options", b"DENY")
+    request.setHeader(b"Cache-Control", b"no-store")
+
+
+def set_cors_response_headers(
+    config: KinemiumConfig, request: SynapseRequest
+) -> None:
+    if not config.enable_cors:
+        return
+    if "*" in config.cors_origins:
+        request.setHeader(b"Access-Control-Allow-Origin", b"*")
+    else:
+        origin = request.getHeader(b"Origin")
+        if origin is None:
+            return
+        try:
+            value = origin.decode("latin-1")
+        except UnicodeDecodeError:
+            return
+        if value not in config.cors_origins:
+            return
+        request.setHeader(b"Access-Control-Allow-Origin", origin)
+        request.setHeader(b"Vary", b"Origin")
+    request.setHeader(b"Access-Control-Expose-Headers", CORS_EXPOSE_HEADERS)
 
 
 def read_body(request: SynapseRequest, max_bytes: int) -> bytes:
@@ -232,6 +267,9 @@ def send_file(
     )
     request.setHeader(b"ETag", f'"sha256:{digest_hex}"'.encode("ascii"))
     request.setHeader(b"Cache-Control", b"private, max-age=60")
+    request.setHeader(b"X-Content-Type-Options", b"nosniff")
+    request.setHeader(b"Referrer-Policy", b"no-referrer")
+    request.setHeader(b"X-Frame-Options", b"DENY")
     if extra_headers:
         for name, value in extra_headers.items():
             request.setHeader(name.encode("latin-1"), value.encode("latin-1"))
@@ -259,6 +297,37 @@ class KinemiumResource(JsonResource):
         super().__init__(hs)
         self.config = config
 
+    def _set_response_headers(self, request: SynapseRequest) -> None:
+        set_security_headers(request)
+        set_cors_response_headers(self.config, request)
+
+    def _respond_error(
+        self, error: SynapseError, request: SynapseRequest
+    ) -> None:
+        if error.headers is not None:
+            for header, value in error.headers.items():
+                request.setHeader(header, value)
+        self._set_response_headers(request)
+        respond_with_json(
+            request,
+            error.code,
+            error.error_dict(self.hs.config),
+            send_cors=False,
+            canonical_json=True,
+        )
+
+    def _send_response(
+        self, request: SynapseRequest, code: int, response_object: Any
+    ) -> None:
+        self._set_response_headers(request)
+        respond_with_json(
+            request,
+            code,
+            response_object,
+            send_cors=False,
+            canonical_json=True,
+        )
+
     def _send_error_response(
         self, f: failure.Failure, request: SynapseRequest
     ) -> None:
@@ -273,29 +342,23 @@ class KinemiumResource(JsonResource):
                     "Kinemium request failed",
                     exc_info=(f.type, f.value, f.getTracebackObject()),
                 )
-                return_json_error(
-                    failure.Failure(
-                        SynapseError(
-                            500,
-                            "Internal server error.",
-                            INTERNAL_ERROR,
-                        )
-                    ),
+                self._respond_error(
+                    SynapseError(500, "Internal server error.", INTERNAL_ERROR),
                     request,
-                    self.hs.config,
                 )
                 return
-            return_json_error(failure.Failure(error), request, self.hs.config)
+            self._respond_error(error, request)
             return
         logger.error(
             "Kinemium request failed",
             exc_info=(f.type, f.value, f.getTracebackObject()),
         )
+        self._set_response_headers(request)
         respond_with_json(
             request,
             500,
             {"errcode": INTERNAL_ERROR, "error": "Internal server error."},
-            send_cors=self.config.enable_cors,
+            send_cors=False,
         )
 
     def register_options(self) -> None:
@@ -311,19 +374,15 @@ class KinemiumResource(JsonResource):
     def _handle_options(self, request: SynapseRequest) -> None:
         request.setResponseCode(204)
         request.setHeader(b"Content-Length", b"0")
+        self._set_response_headers(request)
         if self.config.enable_cors:
-            request.setHeader(b"Access-Control-Allow-Origin", b"*")
             request.setHeader(
                 b"Access-Control-Allow-Methods",
                 b"GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS",
             )
             request.setHeader(
                 b"Access-Control-Allow-Headers",
-                b"Authorization, Content-Type, If-Match",
-            )
-            request.setHeader(
-                b"Access-Control-Expose-Headers",
-                b"ETag, Digest, Retry-After, X-Kinemium-Yanked",
+                b"Authorization, Content-Type, If-Match, Idempotency-Key",
             )
             request.setHeader(b"Access-Control-Max-Age", b"86400")
         request.finish()

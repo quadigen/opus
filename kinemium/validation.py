@@ -7,6 +7,9 @@ from typing import Any
 from .errors import invalid_request
 
 _USER_ID_RE = re.compile(r"^@[^:\x00-\x1f\x7f]{1,255}:[^:\x00-\x1f\x7f/]{1,255}$")
+_ROOM_ID_RE = re.compile(
+    r"^![^:\x00-\x1f\x7f/]{1,255}(?::[^:\x00-\x1f\x7f/]{1,255})?$"
+)
 _SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 _ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
 _MXC_RE = re.compile(r"^mxc://[^/\s]+/[^/\s]+$")
@@ -105,6 +108,12 @@ def require_list(body: dict[str, Any], name: str, maximum: int) -> list[Any]:
 def validate_matrix_user_id(value: str) -> str:
     if not _USER_ID_RE.fullmatch(value):
         raise invalid_request("Invalid Matrix user ID.")
+    return value
+
+
+def validate_room_id(value: str) -> str:
+    if not _ROOM_ID_RE.fullmatch(value):
+        raise invalid_request("Invalid Matrix room ID.")
     return value
 
 

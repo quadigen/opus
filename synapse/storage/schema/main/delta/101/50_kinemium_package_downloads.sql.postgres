@@ -1,0 +1,4 @@
+CREATE TABLE IF NOT EXISTS kinemium_package_downloads (
+    package_id TEXT PRIMARY KEY REFERENCES kinemium_packages(package_id) ON DELETE CASCADE,
+    download_count BIGINT NOT NULL DEFAULT 0
+);

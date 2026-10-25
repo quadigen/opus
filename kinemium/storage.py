@@ -2,17 +2,21 @@ from __future__ import annotations
 
 import hashlib
 import io
+import logging
 import os
 import re
 import stat
 import tarfile
+import unicodedata
 import uuid
 import zipfile
 
 from twisted.internet.threads import deferToThread
 
-from .errors import invalid_request, not_found, payload_too_large
+from .errors import internal_error, invalid_request, not_found, payload_too_large
 from .util import now_ms
+
+logger = logging.getLogger(__name__)
 
 _KEY_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,255}$")
 _UNSAFE_FILENAME_RE = re.compile(r"[\x00-\x1f\x7f]")
@@ -43,8 +47,14 @@ def _safe_archive_member(name: str) -> bool:
         return False
     if re.match(r"^[A-Za-z]:", normalized):
         return False
+    if normalized.endswith("/"):
+        normalized = normalized[:-1]
     parts = normalized.split("/")
     return all(part not in ("", ".", "..") for part in parts)
+
+
+def _member_key(name: str) -> str:
+    return unicodedata.normalize("NFC", name).casefold()
 
 
 def _validate_zip(data: bytes, max_entries: int, max_uncompressed: int) -> None:
@@ -61,16 +71,22 @@ def _validate_zip(data: bytes, max_entries: int, max_uncompressed: int) -> None:
         normalized = info.filename.replace("\\", "/")
         if not _safe_archive_member(normalized):
             raise invalid_request("Archive contains an unsafe path.")
-        if normalized.endswith("/"):
+        mode = (info.external_attr >> 16) & 0xFFFF
+        file_type = stat.S_IFMT(mode)
+        if normalized.endswith("/") or file_type == stat.S_IFDIR:
+            if info.file_size:
+                raise invalid_request("Archive contains an invalid directory entry.")
             continue
-        if normalized in names:
-            raise invalid_request("Archive contains duplicate entries.")
-        names.add(normalized)
         if info.flag_bits & 0x1:
             raise invalid_request("Encrypted archives are not supported.")
-        mode = (info.external_attr >> 16) & 0xFFFF
-        if stat.S_ISLNK(mode):
-            raise invalid_request("Archive contains a symbolic link.")
+        if file_type not in (0, stat.S_IFREG):
+            if file_type == stat.S_IFLNK:
+                raise invalid_request("Archive contains a symbolic link.")
+            raise invalid_request("Archive contains a special file.")
+        key = _member_key(normalized)
+        if key in names:
+            raise invalid_request("Archive contains duplicate entries.")
+        names.add(key)
         total += info.file_size
         if total > max_uncompressed:
             raise invalid_request("Archive expands beyond the configured limit.")
@@ -94,13 +110,14 @@ def _validate_tar(data: bytes, max_entries: int, max_uncompressed: int) -> None:
                 raise invalid_request("Archive contains an unsafe path.")
             if member.issym() or member.islnk():
                 raise invalid_request("Archive contains a link.")
-            if member.ischr() or member.isblk() or member.isfifo():
-                raise invalid_request("Archive contains a special file.")
             if member.isdir():
                 continue
-            if normalized in names:
+            if not member.isreg():
+                raise invalid_request("Archive contains a special file.")
+            key = _member_key(normalized)
+            if key in names:
                 raise invalid_request("Archive contains duplicate entries.")
-            names.add(normalized)
+            names.add(key)
             total += member.size
             if total > max_uncompressed:
                 raise invalid_request("Archive expands beyond the configured limit.")
@@ -169,6 +186,13 @@ class LocalStorage:
             raise payload_too_large("Stored file exceeds the configured limit.")
         return data
 
+    def _read_verified_sync(self, key: str, expected_digest: str) -> bytes:
+        data = self._read_sync(key)
+        if digest_hex(data) != expected_digest:
+            logger.error("Integrity check failed for stored file %s", key)
+            raise internal_error()
+        return data
+
     def _delete_sync(self, key: str) -> None:
         path = self._path_for_key(key)
         try:
@@ -185,6 +209,11 @@ class LocalStorage:
 
     async def read(self, key: str) -> bytes:
         return await deferToThread(self._read_sync, key)
+
+    async def read_verified(self, key: str, expected_digest: str) -> bytes:
+        return await deferToThread(
+            self._read_verified_sync, key, expected_digest
+        )
 
     async def delete(self, key: str) -> None:
         await deferToThread(self._delete_sync, key)

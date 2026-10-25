@@ -128,6 +128,29 @@ def _can_customize(state: Mapping[tuple[str, str], Any], user_id: str) -> bool:
     )
 
 
+async def load_space_state(
+    api: Any, room_id: str, user_id: str
+) -> Mapping[tuple[str, str], Any]:
+    try:
+        state = await api.get_room_state(room_id, _STATE_FILTER)
+    except SynapseError:
+        raise not_found("Space not found.") from None
+    if not _is_space(state):
+        raise not_found("Space not found.")
+    if _member_membership(state, user_id) != "join":
+        raise forbidden("You must be a member of this space.")
+    return state
+
+
+def can_manage_space(state: Mapping[tuple[str, str], Any], user_id: str) -> bool:
+    return _can_customize(state, user_id)
+
+
+def space_name(state: Mapping[tuple[str, str], Any]) -> str | None:
+    value = _content(state, _NAME).get("name")
+    return value if isinstance(value, str) else None
+
+
 def _emojis(state: Mapping[tuple[str, str], Any]) -> list[dict[str, Any]]:
     content = _content(state, _EMOJIS)
     raw = content.get("emojis")
@@ -184,6 +207,18 @@ class SpaceService(Service):
             "KinemiumSpaceBannerServlet",
         )
         resource.register_paths(
+            "DELETE",
+            [re.compile(r"^/_kinemium/v1/spaces/(?P<room_id>[^/]+)/avatar$")],
+            self.delete_space_avatar,
+            "KinemiumSpaceAvatarServlet",
+        )
+        resource.register_paths(
+            "DELETE",
+            [re.compile(r"^/_kinemium/v1/spaces/(?P<room_id>[^/]+)/banner$")],
+            self.delete_space_banner,
+            "KinemiumSpaceBannerServlet",
+        )
+        resource.register_paths(
             "GET",
             [re.compile(r"^/_kinemium/v1/spaces/(?P<room_id>[^/]+)/emojis$")],
             self.get_space_emojis,
@@ -215,15 +250,7 @@ class SpaceService(Service):
     async def _load_space(
         self, room_id: str, user_id: str
     ) -> Mapping[tuple[str, str], Any]:
-        try:
-            state = await self.api.get_room_state(room_id, _STATE_FILTER)
-        except SynapseError:
-            raise not_found("Space not found.") from None
-        if not _is_space(state):
-            raise not_found("Space not found.")
-        if _member_membership(state, user_id) != "join":
-            raise forbidden("You must be a member of this space.")
-        return state
+        return await load_space_state(self.api, room_id, user_id)
 
     async def _send_state(
         self,
@@ -418,6 +445,33 @@ class SpaceService(Service):
         profile["banner_url"] = banner_url
         profile["updated_at"] = now_ms()
         await self._send_state(room_id, caller.user_id, SPACE_PROFILE_EVENT, profile)
+        state = await self._load_space(room_id, caller.user_id)
+        return 200, self._payload(room_id, state, caller.user_id)
+
+    async def delete_space_avatar(
+        self, request: SynapseRequest, room_id: str
+    ) -> tuple[int, dict[str, Any]]:
+        caller = await self._require(request, SPACES_WRITE)
+        self.enforce_rate_limit(request, caller)
+        state = await self._load_space(room_id, caller.user_id)
+        _require_power(state, caller.user_id, {"m.room.avatar"})
+        await self._send_state(room_id, caller.user_id, "m.room.avatar", {})
+        state = await self._load_space(room_id, caller.user_id)
+        return 200, self._payload(room_id, state, caller.user_id)
+
+    async def delete_space_banner(
+        self, request: SynapseRequest, room_id: str
+    ) -> tuple[int, dict[str, Any]]:
+        caller = await self._require(request, SPACES_WRITE)
+        self.enforce_rate_limit(request, caller)
+        state = await self._load_space(room_id, caller.user_id)
+        _require_power(state, caller.user_id, {SPACE_PROFILE_EVENT})
+        profile = _content(state, _PROFILE)
+        profile.pop("banner_url", None)
+        profile["updated_at"] = now_ms()
+        await self._send_state(
+            room_id, caller.user_id, SPACE_PROFILE_EVENT, profile
+        )
         state = await self._load_space(room_id, caller.user_id)
         return 200, self._payload(room_id, state, caller.user_id)
 

@@ -2617,13 +2617,17 @@ def _prioritise_destinations_for_partial_state_resync(
 ) -> StrCollection:
     """Work out the order in which we should ask servers to resync events.
 
-    If an `initial_destination` is given, it takes top priority. Otherwise
-    all servers are treated equally.
+    The room's origin server is tried first if it is in `other_destinations`,
+    followed by `initial_destination` and the remaining servers.
 
     :raises ValueError: if no destination is provided at all.
     """
     if initial_destination is None and len(other_destinations) == 0:
         raise ValueError(f"Cannot resync state of {room_id}: no destinations provided")
+
+    room_origin = get_domain_from_id(room_id)
+    if room_origin in other_destinations:
+        initial_destination = room_origin
 
     if initial_destination is None:
         return other_destinations

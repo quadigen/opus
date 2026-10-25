@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, fields
 from typing import Any
+from urllib.parse import urlparse
 
 from synapse.config._base import ConfigError
 
@@ -77,6 +78,62 @@ def _parse_bool(value: Any, name: str) -> bool:
     return value
 
 
+def _parse_secret(value: Any, name: str) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ConfigError(f"{name} must be a string or null", path=(name,))
+    value = value.strip()
+    if not value:
+        return None
+    if len(value) < 16 or len(value) > 512:
+        raise ConfigError(
+            f"{name} must be between 16 and 512 characters", path=(name,)
+        )
+    if any(ord(character) < 32 or ord(character) == 127 for character in value):
+        raise ConfigError(
+            f"{name} must not contain control characters", path=(name,)
+        )
+    return value
+
+
+def _parse_cors_origins(value: Any, name: str) -> tuple[str, ...]:
+    if not isinstance(value, list) or not value:
+        raise ConfigError(
+            f"{name} must be a non-empty array of origins", path=(name,)
+        )
+    if len(value) > 100:
+        raise ConfigError(f"{name} contains too many origins", path=(name,))
+    origins: list[str] = []
+    for item in value:
+        if not isinstance(item, str) or not item.strip():
+            raise ConfigError(
+                f"{name} must contain non-empty strings", path=(name,)
+            )
+        origin = item.strip().rstrip("/")
+        if origin == "*":
+            if origin not in origins:
+                origins.append(origin)
+            continue
+        parsed = urlparse(origin)
+        if (
+            parsed.scheme not in ("http", "https")
+            or not parsed.hostname
+            or parsed.username
+            or parsed.password
+            or parsed.path
+            or parsed.params
+            or parsed.query
+            or parsed.fragment
+        ):
+            raise ConfigError(
+                f"{name} entries must be http or https origins", path=(name,)
+            )
+        if origin not in origins:
+            origins.append(origin)
+    return tuple(origins)
+
+
 @dataclass(frozen=True)
 class KinemiumConfig:
     storage_path: str
@@ -88,15 +145,14 @@ class KinemiumConfig:
     max_media_bytes: int = DEFAULT_MAX_MEDIA_BYTES
     max_emoji_bytes: int = DEFAULT_MAX_EMOJI_BYTES
     max_space_emojis: int = 50
-    max_datastore_key_length: int = 128
-    max_datastore_value_bytes: int = 64 * 1024
-    max_datastore_batch: int = 50
-    max_datastores_per_game: int = 32
-    max_datastores_per_user: int = 128
-    max_entries_per_store: int = 100000
-    max_ordered_entries_per_store: int = 100000
     max_api_tokens_per_user: int = 25
-    max_marketplace_versions_per_item: int = 100
+    max_webhooks_per_user: int = 20
+    max_collab_participants: int = 16
+    collab_session_ttl_seconds: int = 6 * 60 * 60
+    collab_invite_ttl_seconds: int = 24 * 60 * 60
+    collab_signal_ttl_seconds: int = 5 * 60
+    max_collab_signal_bytes: int = 64 * 1024
+    server_worker_token: str | None = None
     max_package_versions: int = 1000
     max_listing_tags: int = 20
     max_review_length: int = 4000
@@ -106,9 +162,8 @@ class KinemiumConfig:
     pagination_max_limit: int = 100
     rate_limit_per_second: float = 20.0
     rate_limit_burst: int = 60
-    datastore_rate_limit_per_second: float = 50.0
-    datastore_rate_limit_burst: int = 200
     enable_cors: bool = True
+    cors_origins: tuple[str, ...] = ("*",)
 
     @classmethod
     def from_dict(cls, raw: dict[str, Any]) -> "KinemiumConfig":
@@ -165,19 +220,17 @@ class KinemiumConfig:
             "max_archive_uncompressed_bytes",
             "max_media_bytes",
             "max_emoji_bytes",
+            "max_collab_signal_bytes",
         }
         int_bounds = {
             "max_archive_entries": (1, 1000000),
             "max_space_emojis": (0, 1000),
-            "max_datastore_key_length": (1, 1024),
-            "max_datastore_value_bytes": (1, 16 * 1024 * 1024),
-            "max_datastore_batch": (1, 1000),
-            "max_datastores_per_game": (1, 100000),
-            "max_datastores_per_user": (1, 100000),
-            "max_entries_per_store": (1, 100000000),
-            "max_ordered_entries_per_store": (1, 100000000),
             "max_api_tokens_per_user": (1, 100000),
-            "max_marketplace_versions_per_item": (1, 100000),
+            "max_webhooks_per_user": (0, 10000),
+            "max_collab_participants": (2, 1000),
+            "collab_session_ttl_seconds": (60, 604800),
+            "collab_invite_ttl_seconds": (60, 2592000),
+            "collab_signal_ttl_seconds": (10, 86400),
             "max_package_versions": (1, 1000000),
             "max_listing_tags": (0, 1000),
             "max_review_length": (1, 1000000),
@@ -186,7 +239,6 @@ class KinemiumConfig:
             "pagination_default_limit": (1, 1000),
             "pagination_max_limit": (1, 1000),
             "rate_limit_burst": (1, 1000000),
-            "datastore_rate_limit_burst": (1, 1000000),
         }
         for name, (minimum, maximum) in int_bounds.items():
             if name in raw:
@@ -194,11 +246,20 @@ class KinemiumConfig:
         for name in size_fields:
             if name in raw:
                 values[name] = _parse_size(raw[name], name)
-        for name in ("rate_limit_per_second", "datastore_rate_limit_per_second"):
-            if name in raw:
-                values[name] = _parse_float(raw[name], name)
+        if "rate_limit_per_second" in raw:
+            values["rate_limit_per_second"] = _parse_float(
+                raw["rate_limit_per_second"], "rate_limit_per_second"
+            )
         if "enable_cors" in raw:
             values["enable_cors"] = _parse_bool(raw["enable_cors"], "enable_cors")
+        if "cors_origins" in raw:
+            values["cors_origins"] = _parse_cors_origins(
+                raw["cors_origins"], "cors_origins"
+            )
+        if "server_worker_token" in raw:
+            values["server_worker_token"] = _parse_secret(
+                raw["server_worker_token"], "server_worker_token"
+            )
 
         config = cls(**values)
         if config.pagination_default_limit > config.pagination_max_limit:
@@ -208,5 +269,9 @@ class KinemiumConfig:
         if config.max_archive_bytes > config.max_json_body_bytes:
             raise ConfigError(
                 "max_json_body_bytes must be at least max_archive_bytes"
+            )
+        if config.max_collab_signal_bytes > config.max_json_body_bytes:
+            raise ConfigError(
+                "max_json_body_bytes must be at least max_collab_signal_bytes"
             )
         return config

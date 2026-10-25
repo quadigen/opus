@@ -1,0 +1,11 @@
+ALTER TABLE kinemium_package_versions ADD COLUMN review_status TEXT NOT NULL DEFAULT 'approved'
+    CHECK (review_status IN ('pending', 'approved', 'rejected'));
+ALTER TABLE kinemium_package_versions ADD COLUMN review_note TEXT NOT NULL DEFAULT '';
+ALTER TABLE kinemium_package_versions ADD COLUMN reviewed_by TEXT;
+ALTER TABLE kinemium_package_versions ADD COLUMN reviewed_at BIGINT;
+ALTER TABLE kinemium_package_versions ADD COLUMN submitted_at BIGINT NOT NULL DEFAULT 0;
+
+UPDATE kinemium_package_versions SET submitted_at = published_at;
+
+CREATE INDEX IF NOT EXISTS kinemium_package_versions_review
+    ON kinemium_package_versions (review_status, submitted_at, version_id);

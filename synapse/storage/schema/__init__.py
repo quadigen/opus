@@ -19,7 +19,7 @@
 #
 #
 
-SCHEMA_VERSION = 96  # remember to update the list below when updating
+SCHEMA_VERSION = 106  # remember to update the list below when updating
 """Represents the expectations made by the codebase about the database schema
 
 This should be incremented whenever the codebase changes its requirements on the
@@ -186,6 +186,46 @@ Changes in SCHEMA_VERSION = 95
 
 Changes in SCHEMA_VERSION = 96
     - Add profile customization columns to `kinemium_profiles`.
+
+Changes in SCHEMA_VERSION = 97
+    - Fold package metadata into `kinemium_packages`.
+    - Remove datastore tables and the standalone marketplace item tables.
+    - Key marketplace acquisitions and reviews by package.
+
+Changes in SCHEMA_VERSION = 98
+    - Add admin review state to `kinemium_packages`.
+
+Changes in SCHEMA_VERSION = 99
+    - Add icon and banner URLs to `kinemium_packages`.
+
+Changes in SCHEMA_VERSION = 100
+    - Add `kinemium_package_reactions` for package likes and dislikes.
+    - Add `kinemium_package_comments` for package comments.
+
+Changes in SCHEMA_VERSION = 101
+    - Add `kinemium_package_downloads` for package download counts.
+
+Changes in SCHEMA_VERSION = 102
+    - Add Kinemium platform features: package lifecycle metadata, screenshots,
+      events, reports, audit logging, notifications, webhooks, and idempotency.
+
+Changes in SCHEMA_VERSION = 103
+    - Add per-version review state to `kinemium_package_versions` so newly
+      published versions can be held for review without unpublishing approved
+      versions.
+
+Changes in SCHEMA_VERSION = 104
+    - Add space ownership to Kinemium package namespaces and packages, and add
+      the admin-managed official package marker.
+
+Changes in SCHEMA_VERSION = 105
+    - Add profile media and metadata to `kinemium_games`.
+    - Add `kinemium_game_server_requests` and `kinemium_game_servers` for free
+      game server hosting requests and provisioned workers.
+
+Changes in SCHEMA_VERSION = 106
+    - Add Kinemium Studio collaboration sessions, participants, invitations,
+      join requests, and ephemeral WebRTC signaling messages.
 """
 
 

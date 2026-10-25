@@ -1,0 +1,212 @@
+CREATE TABLE IF NOT EXISTS kinemium_profiles (
+    user_id TEXT PRIMARY KEY,
+    bio TEXT NOT NULL DEFAULT '',
+    website TEXT,
+    public_profile BOOLEAN NOT NULL DEFAULT 1,
+    public_marketplace BOOLEAN NOT NULL DEFAULT 1,
+    created_at BIGINT NOT NULL,
+    updated_at BIGINT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS kinemium_games (
+    game_id TEXT PRIMARY KEY,
+    owner_user_id TEXT NOT NULL REFERENCES kinemium_profiles(user_id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    created_at BIGINT NOT NULL,
+    updated_at BIGINT NOT NULL,
+    UNIQUE (owner_user_id, name)
+);
+
+CREATE INDEX IF NOT EXISTS kinemium_games_owner_idx
+    ON kinemium_games (owner_user_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS kinemium_api_credentials (
+    token_id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES kinemium_profiles(user_id) ON DELETE CASCADE,
+    game_id TEXT REFERENCES kinemium_games(game_id) ON DELETE SET NULL,
+    name TEXT NOT NULL,
+    token_hash TEXT NOT NULL UNIQUE,
+    scopes TEXT NOT NULL,
+    created_at BIGINT NOT NULL,
+    last_used_at BIGINT,
+    revoked_at BIGINT
+);
+
+CREATE INDEX IF NOT EXISTS kinemium_api_credentials_user_idx
+    ON kinemium_api_credentials (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS kinemium_api_credentials_game_idx
+    ON kinemium_api_credentials (game_id);
+
+CREATE TABLE IF NOT EXISTS kinemium_package_namespaces (
+    namespace TEXT PRIMARY KEY,
+    owner_user_id TEXT NOT NULL REFERENCES kinemium_profiles(user_id) ON DELETE CASCADE,
+    created_at BIGINT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS kinemium_packages (
+    package_id TEXT PRIMARY KEY,
+    namespace TEXT NOT NULL REFERENCES kinemium_package_namespaces(namespace) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    owner_user_id TEXT NOT NULL REFERENCES kinemium_profiles(user_id) ON DELETE CASCADE,
+    description TEXT NOT NULL DEFAULT '',
+    license TEXT,
+    repository TEXT,
+    engine_constraint TEXT,
+    deprecated BOOLEAN NOT NULL DEFAULT 0,
+    deprecated_at BIGINT,
+    created_at BIGINT NOT NULL,
+    updated_at BIGINT NOT NULL,
+    UNIQUE (namespace, name)
+);
+
+CREATE INDEX IF NOT EXISTS kinemium_packages_owner_idx
+    ON kinemium_packages (owner_user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS kinemium_packages_name_idx
+    ON kinemium_packages (LOWER(name));
+
+CREATE TABLE IF NOT EXISTS kinemium_package_versions (
+    version_id TEXT PRIMARY KEY,
+    package_id TEXT NOT NULL REFERENCES kinemium_packages(package_id) ON DELETE CASCADE,
+    version TEXT NOT NULL,
+    manifest TEXT NOT NULL,
+    entrypoint TEXT,
+    engine_constraint TEXT,
+    digest TEXT NOT NULL,
+    storage_key TEXT NOT NULL,
+    size_bytes BIGINT NOT NULL,
+    yanked BOOLEAN NOT NULL DEFAULT 0,
+    published_at BIGINT NOT NULL,
+    UNIQUE (package_id, version)
+);
+
+CREATE INDEX IF NOT EXISTS kinemium_package_versions_package_idx
+    ON kinemium_package_versions (package_id, published_at DESC);
+CREATE INDEX IF NOT EXISTS kinemium_package_versions_yanked_idx
+    ON kinemium_package_versions (package_id, yanked);
+
+CREATE TABLE IF NOT EXISTS kinemium_package_dependencies (
+    package_id TEXT NOT NULL,
+    version TEXT NOT NULL,
+    dependency_namespace TEXT NOT NULL,
+    dependency_name TEXT NOT NULL,
+    constraint_text TEXT NOT NULL,
+    PRIMARY KEY (package_id, version, dependency_namespace, dependency_name),
+    FOREIGN KEY (package_id, version)
+        REFERENCES kinemium_package_versions(package_id, version) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS kinemium_package_dependencies_name_idx
+    ON kinemium_package_dependencies (dependency_namespace, dependency_name);
+
+CREATE TABLE IF NOT EXISTS kinemium_marketplace_items (
+    item_id TEXT PRIMARY KEY,
+    owner_user_id TEXT NOT NULL REFERENCES kinemium_profiles(user_id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    item_type TEXT NOT NULL CHECK (item_type IN ('model', 'plugin', 'template', 'tool', 'package')),
+    tags TEXT NOT NULL DEFAULT '[]',
+    tags_text TEXT NOT NULL DEFAULT '',
+    visibility TEXT NOT NULL DEFAULT 'public' CHECK (visibility IN ('public', 'unlisted', 'private')),
+    status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'published', 'unpublished', 'removed')),
+    price_amount BIGINT NOT NULL DEFAULT 0 CHECK (price_amount >= 0),
+    price_currency TEXT NOT NULL DEFAULT 'USD',
+    package_id TEXT REFERENCES kinemium_packages(package_id) ON DELETE SET NULL,
+    package_version TEXT,
+    created_at BIGINT NOT NULL,
+    updated_at BIGINT NOT NULL,
+    published_at BIGINT,
+    deleted_at BIGINT
+);
+
+CREATE INDEX IF NOT EXISTS kinemium_marketplace_items_owner_idx
+    ON kinemium_marketplace_items (owner_user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS kinemium_marketplace_items_browse_idx
+    ON kinemium_marketplace_items (status, visibility, created_at DESC, item_id DESC);
+CREATE INDEX IF NOT EXISTS kinemium_marketplace_items_type_idx
+    ON kinemium_marketplace_items (item_type, created_at DESC);
+CREATE INDEX IF NOT EXISTS kinemium_marketplace_items_name_idx
+    ON kinemium_marketplace_items (LOWER(name));
+CREATE INDEX IF NOT EXISTS kinemium_marketplace_items_tags_idx
+    ON kinemium_marketplace_items (tags_text);
+
+CREATE TABLE IF NOT EXISTS kinemium_marketplace_versions (
+    version_id TEXT PRIMARY KEY,
+    item_id TEXT NOT NULL REFERENCES kinemium_marketplace_items(item_id) ON DELETE CASCADE,
+    version TEXT NOT NULL,
+    changelog TEXT NOT NULL DEFAULT '',
+    filename TEXT NOT NULL,
+    storage_key TEXT NOT NULL,
+    digest TEXT NOT NULL,
+    size_bytes BIGINT NOT NULL,
+    created_at BIGINT NOT NULL,
+    UNIQUE (item_id, version)
+);
+
+CREATE INDEX IF NOT EXISTS kinemium_marketplace_versions_item_idx
+    ON kinemium_marketplace_versions (item_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS kinemium_marketplace_acquisitions (
+    acquisition_id TEXT PRIMARY KEY,
+    item_id TEXT NOT NULL REFERENCES kinemium_marketplace_items(item_id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES kinemium_profiles(user_id) ON DELETE CASCADE,
+    created_at BIGINT NOT NULL,
+    UNIQUE (item_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS kinemium_marketplace_acquisitions_user_idx
+    ON kinemium_marketplace_acquisitions (user_id, created_at DESC, item_id DESC);
+
+CREATE TABLE IF NOT EXISTS kinemium_marketplace_reviews (
+    review_id TEXT PRIMARY KEY,
+    item_id TEXT NOT NULL REFERENCES kinemium_marketplace_items(item_id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES kinemium_profiles(user_id) ON DELETE CASCADE,
+    rating SMALLINT NOT NULL CHECK (rating BETWEEN 1 AND 5),
+    body TEXT NOT NULL DEFAULT '',
+    created_at BIGINT NOT NULL,
+    updated_at BIGINT NOT NULL,
+    UNIQUE (item_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS kinemium_marketplace_reviews_item_idx
+    ON kinemium_marketplace_reviews (item_id, created_at DESC, review_id DESC);
+
+CREATE TABLE IF NOT EXISTS kinemium_datastores (
+    store_id TEXT PRIMARY KEY,
+    game_id TEXT NOT NULL REFERENCES kinemium_games(game_id) ON DELETE CASCADE,
+    owner_user_id TEXT NOT NULL REFERENCES kinemium_profiles(user_id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    config TEXT NOT NULL DEFAULT '{}',
+    created_at BIGINT NOT NULL,
+    updated_at BIGINT NOT NULL,
+    UNIQUE (game_id, name)
+);
+
+CREATE INDEX IF NOT EXISTS kinemium_datastores_game_idx
+    ON kinemium_datastores (game_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS kinemium_datastores_owner_idx
+    ON kinemium_datastores (owner_user_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS kinemium_datastore_entries (
+    store_id TEXT NOT NULL REFERENCES kinemium_datastores(store_id) ON DELETE CASCADE,
+    entry_key TEXT NOT NULL,
+    value TEXT NOT NULL,
+    version BIGINT NOT NULL DEFAULT 1,
+    created_at BIGINT NOT NULL,
+    updated_at BIGINT NOT NULL,
+    PRIMARY KEY (store_id, entry_key)
+);
+
+CREATE TABLE IF NOT EXISTS kinemium_datastore_ordered_entries (
+    store_id TEXT NOT NULL REFERENCES kinemium_datastores(store_id) ON DELETE CASCADE,
+    entry_key TEXT NOT NULL,
+    score DOUBLE PRECISION NOT NULL,
+    value TEXT,
+    version BIGINT NOT NULL DEFAULT 1,
+    created_at BIGINT NOT NULL,
+    updated_at BIGINT NOT NULL,
+    PRIMARY KEY (store_id, entry_key)
+);
+
+CREATE INDEX IF NOT EXISTS kinemium_datastore_ordered_score_idx
+    ON kinemium_datastore_ordered_entries (store_id, score, entry_key);

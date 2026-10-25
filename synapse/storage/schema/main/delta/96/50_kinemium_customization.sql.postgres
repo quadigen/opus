@@ -1,0 +1,6 @@
+ALTER TABLE kinemium_profiles
+    ADD COLUMN banner_url TEXT,
+    ADD COLUMN accent_color TEXT,
+    ADD COLUMN status_text TEXT NOT NULL DEFAULT '',
+    ADD COLUMN status_emoji TEXT,
+    ADD COLUMN pronouns TEXT;

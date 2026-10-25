@@ -1,0 +1,23 @@
+CREATE TABLE IF NOT EXISTS kinemium_package_reactions (
+    package_id TEXT NOT NULL REFERENCES kinemium_packages(package_id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES kinemium_profiles(user_id) ON DELETE CASCADE,
+    value SMALLINT NOT NULL CHECK (value IN (-1, 1)),
+    created_at BIGINT NOT NULL,
+    updated_at BIGINT NOT NULL,
+    PRIMARY KEY (package_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS kinemium_package_reactions_package
+    ON kinemium_package_reactions (package_id, value);
+
+CREATE TABLE IF NOT EXISTS kinemium_package_comments (
+    comment_id TEXT PRIMARY KEY,
+    package_id TEXT NOT NULL REFERENCES kinemium_packages(package_id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES kinemium_profiles(user_id) ON DELETE CASCADE,
+    body TEXT NOT NULL,
+    created_at BIGINT NOT NULL,
+    updated_at BIGINT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS kinemium_package_comments_package
+    ON kinemium_package_comments (package_id, created_at DESC, comment_id DESC);
